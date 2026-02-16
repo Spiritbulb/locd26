@@ -217,14 +217,6 @@ const Navbar = () => {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push('/favourites')}
-            >
-              <Heart className="h-5 w-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
               onClick={() => router.push('/cart')}
               className="relative"
             >
@@ -451,14 +443,6 @@ const Navbar = () => {
 
                 {/* Mobile Actions */}
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => { router.push('/favourites'); setMobileOpen(false); }}
-                  >
-                    <Heart className="mr-2 h-4 w-4" />
-                    Wishlist
-                  </Button>
                   <Button
                     variant="outline"
                     className="flex-1"
