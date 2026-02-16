@@ -193,7 +193,7 @@ export default function Home() {
     {
       title: "Your statement of confidence",
       subtitle: "Discover our bestsellers, essentials and luxurious natural blends.",
-      buttonText: "Show me more",
+      buttonText: "Show me",
       image: heroImage,
       accent: "New Arrivals"
     },
