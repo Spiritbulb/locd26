@@ -103,8 +103,6 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
-  const isProductFavorite = isFavorite(product.id);
-
   // Get the first image from the product
   const productImage = product.image ||
     (Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : null) ||
