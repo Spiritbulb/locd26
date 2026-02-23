@@ -44,20 +44,26 @@ export async function POST(req: NextRequest) {
     const KES_TO_USD = 0.0077; // KES 130 = $1 USD
     const orderTotalUSD = (Number(totalKES) * KES_TO_USD).toFixed(2);
 
-    // ✅ VALID PayPal items (PayPal is EXTREMELY strict)
-    const paypalItems = items.slice(0, 250).map((item: any, index: number) => ({
-      name: (item.name || `Item ${index + 1}`).slice(0, 127).trim(),
-      sku: (item.sku || `SKU${index + 1}`).slice(0, 64) || undefined,
-      unit_amount: {
-        currency_code: 'USD',
-        value: (item.price * KES_TO_USD).toFixed(2),
-      },
-      quantity: String(Math.max(1, Math.min(999, item.quantity))),
-    }));
+    // ✅ Penny-perfect USD conversion (fixes float errors)
+const paypalItems = items.slice(0, 250).map((item: any, index: number) => {
+  const unitCents = Math.round(item.price * 100 * KES_TO_USD);  // KES → cents → USD cents
+  const unitUSD = (unitCents / 100).toFixed(2);
+  const qtyCents = unitCents * (item.quantity || 1);
+  return {
+    name: (item.name || `Item ${index + 1}`).slice(0, 127).trim(),
+    sku: (item.sku || `SKU${index + 1}`).slice(0, 64) || undefined,
+    unit_amount: {
+      currency_code: 'USD',
+      value: unitUSD,
+    },
+    quantity: String(Math.max(1, Math.min(999, item.quantity || 1))),
+  };
+});
 
-    const itemsTotalUSD = paypalItems
-      .reduce((sum, item) => sum + parseFloat(item.unit_amount.value) * parseInt(item.quantity), 0)
-      .toFixed(2);
+const itemsTotalCents = paypalItems.reduce((sum, item) => {
+  return sum + (parseInt(item.unit_amount.value.replace('.', '')) * parseInt(item.quantity));
+}, 0);
+const itemsTotalUSD = (itemsTotalCents / 100).toFixed(2);  // Guaranteed match!
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
