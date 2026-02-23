@@ -391,7 +391,7 @@ const Navbar = () => {
                                   <Label htmlFor="firstName" className="text-xs">First Name</Label>
                                   <Input
                                     id="firstName"
-                                    size="sm"
+                                   
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
                                     required
