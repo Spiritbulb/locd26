@@ -401,7 +401,7 @@ const Navbar = () => {
                                   <Label htmlFor="lastName" className="text-xs">Last Name</Label>
                                   <Input
                                     id="lastName"
-                                    size="sm"
+                                   
                                     value={lastName}
                                     onChange={(e) => setLastName(e.target.value)}
                                     required
@@ -414,7 +414,7 @@ const Navbar = () => {
                               <Input
                                 id="email"
                                 type="email"
-                                size="sm"
+                               
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="your@email.com"
@@ -427,7 +427,7 @@ const Navbar = () => {
                                 <Input
                                   id="password"
                                   type="password"
-                                  size="sm"
+                                 
                                   value={password}
                                   onChange={(e) => setPassword(e.target.value)}
                                   required
@@ -440,7 +440,7 @@ const Navbar = () => {
                                 <Input
                                   id="confirmPassword"
                                   type="password"
-                                  size="sm"
+                                  
                                   value={confirmPassword}
                                   onChange={(e) => setConfirmPassword(e.target.value)}
                                   required
