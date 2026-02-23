@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/server'; // server-side Supabase client
+import { createClient } from '@/lib/client'; // server-side Supabase client
 
 const PAYPAL_BASE =
   process.env.PAYPAL_MODE === 'live'
