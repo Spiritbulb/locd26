@@ -382,13 +382,6 @@ const Navbar = () => {
                                 : 'Welcome Back'
                             }
                           </CardTitle>
-                          <CardDescription className="text-xs">
-                            {authMode === 'signup'
-                              ? 'Join our community'
-                              : authMode === 'recover'
-                                ? 'Enter your email to receive a reset link'
-                                : 'Sign in to your account'}
-                          </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0 space-y-4">
                           <form onSubmit={handleAuthSubmit}>
