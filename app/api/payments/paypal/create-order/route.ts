@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
 
     const accessToken = await getAccessToken();
     const KES_TO_USD = 0.0077; // KES 130 = $1 USD
-    const orderTotalUSD = (Number(totalKES) * KES_TO_USD).toFixed(2);
 
     // ✅ Penny-perfect USD conversion (fixes float errors)
 const paypalItems = items.slice(0, 250).map((item: any, index: number) => {
@@ -63,7 +62,9 @@ const paypalItems = items.slice(0, 250).map((item: any, index: number) => {
 const itemsTotalCents = paypalItems.reduce((sum, item) => {
   return sum + (parseInt(item.unit_amount.value.replace('.', '')) * parseInt(item.quantity));
 }, 0);
-const itemsTotalUSD = (itemsTotalCents / 100).toFixed(2);  // Guaranteed match!
+ const itemsTotalUSD = paypalItems.reduce((sum, item) => sum + parseFloat(item.unit_amount.value) * parseInt(item.quantity), 0).toFixed(2);
+const breakdownTotalUSD = (parseFloat(itemsTotalUSD) + 0 + 0).toFixed(2);  // +shipping(0)+tax(0)
+const orderTotalUSD = breakdownTotalUSD;
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
