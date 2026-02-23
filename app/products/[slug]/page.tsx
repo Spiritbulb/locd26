@@ -504,7 +504,7 @@ export default function ProductDetailPage() {
                 ) : (
                   <ShoppingCart className="mr-2 h-5 w-5" />
                 )}
-                {cartLoading ? 'Adding...' : isInStock ? 'Add to Cart' : 'Out of Stock'}
+                {cartLoading ? 'Pushing your order...' : isInStock ? 'Add to Cart' : 'Out of Stock'}
               </Button>
 
               
