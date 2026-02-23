@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       captureData?.purchase_units?.[0]?.reference_id as string | undefined;
 
     // Update DB: mark order as paid
-    const supabase = createClient();
+    const supabase = await createClient();
     if (referenceId) {
       await supabase
         .from('orders')
