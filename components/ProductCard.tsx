@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Product } from '@/types';
 import { useCart } from '@/context/CartContext';
-import { useFavorites } from '@/context/FavoritesContext';
 import { useNotification } from '@/context/NotificationContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +33,6 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showQuickView, setShowQuickView] = useState(false);
   const { addToCart, loading: cartLoading } = useCart();
-  const { addToFavorites, removeFromFavorites, isFavorite, loading: favoritesLoading } = useFavorites();
   const { notify } = useNotification();
 
   const formatPrice = (price: number) => {
@@ -73,24 +71,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    try {
-      if (isFavorite(product.id)) {
-        await removeFromFavorites(product.id);
-        notify('Removed from favorites', 'info');
-      } else {
-        await addToFavorites(product);
-        notify('Added to favorites!', 'success');
-      }
-    } catch (error) {
-      console.error('Failed to toggle favorite:', error);
-      notify('Failed to update favorites', 'error');
-    }
-  };
-
+  
   const handleShare = (platform: string) => {
     const productName = product.title || product.name;
     const productDescription = product.description || `Check out ${productName}`;
@@ -227,20 +208,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
 
           <div className="flex flex-row gap-2">
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={handleToggleFavorite}
-              disabled={favoritesLoading}
-              className={isProductFavorite ? 'text-destructive' : ''}
-            >
-              {favoritesLoading ? (
-                <div className="h-4 w-4 border-2 border-muted-foreground border-t-transparent animate-spin" />
-              ) : (
-                <Heart className={`h-4 w-4 ${isProductFavorite ? 'fill-current' : ''}`} />
-              )}
-            </Button>
-
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="icon">

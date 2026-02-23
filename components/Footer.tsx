@@ -59,12 +59,6 @@ export default function Footer() {
               Cart
             </Link>
             <Link
-              href="/favourites"
-              className="text-gray-600 hover:text-[#8a6e5d] transition-colors duration-300"
-            >
-              Favorites
-            </Link>
-            <Link
               href="/about"
               className="text-gray-600 hover:text-[#8a6e5d] transition-colors duration-300"
             >

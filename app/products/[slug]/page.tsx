@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/client';
 import { useCart } from '@/context/CartContext';
-import { useFavorites } from '@/context/FavoritesContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -83,7 +82,6 @@ export default function ProductDetailPage() {
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const { addToCart, loading: cartLoading } = useCart();
-  const { addToFavorites, removeFromFavorites, isFavorite, loading: favoritesLoading } = useFavorites();
 
   const STORE_SLUG = process.env.NEXT_PUBLIC_STORE_SLUG;
 
@@ -215,33 +213,7 @@ export default function ProductDetailPage() {
     }
   };
 
-  const handleToggleFavorite = () => {
-    if (!product) return;
-
-    if (isFavorite(product.id)) {
-      removeFromFavorites(product.id);
-    } else {
-      addToFavorites({
-        id: product.id,
-        title: product.name,
-        name: product.name,
-        handle: product.slug,
-        description: product.description || '',
-        slug: product.slug,
-        price: selectedVariant ? selectedVariant.price : product.price,
-        image: product.images[0] || '',
-        brand: product.metadata?.productType || 'Product',
-        rating: product.metadata?.rating || 4,
-        reviews: product.metadata?.reviews || 0,
-        inStock: selectedVariant ? selectedVariant.inventory_quantity > 0 : product.inventory_quantity > 0,
-        stock: selectedVariant?.inventory_quantity || product.inventory_quantity,
-        isNew: false,
-        category: product.metadata?.productType || 'Uncategorized',
-        sku: selectedVariant?.sku || product.sku || product.id
-      });
-    }
-  };
-
+  
   const nextImage = () => {
     if (product && product.images.length > 1) {
       setCurrentImageIndex((prev) =>
@@ -535,20 +507,7 @@ export default function ProductDetailPage() {
                 {cartLoading ? 'Adding...' : isInStock ? 'Add to Cart' : 'Out of Stock'}
               </Button>
 
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleToggleFavorite}
-                disabled={favoritesLoading}
-                className={`h-12 w-12 ${isFavorite(product.id) ? 'text-destructive' : ''}`}
-              >
-                {favoritesLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Heart className={`h-5 w-5 ${isFavorite(product.id) ? 'fill-current' : ''}`} />
-                )}
-              </Button>
-
+              
               <Button variant="outline" size="icon" className="h-12 w-12">
                 <Share2 className="h-5 w-5" />
               </Button>

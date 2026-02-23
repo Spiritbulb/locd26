@@ -1,160 +1,136 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/server';
-import { convertKEStoUSD } from '@/lib/currency';
 
-const paypal = require('@paypal/checkout-server-sdk');
+const PAYPAL_BASE =
+  process.env.PAYPAL_MODE === 'live'
+    ? 'https://api-m.paypal.com'
+    : 'https://api-m.sandbox.paypal.com';
 
-function environment() {
-    const clientId = process.env.PAYPAL_CLIENT_ID;
-    const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-    return new paypal.core.LiveEnvironment(clientId, clientSecret);
+// Exchange a client_id + secret for a bearer token
+async function getAccessToken(): Promise<string> {
+  const credentials = Buffer.from(
+    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
+  ).toString('base64');
+
+  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`PayPal token error: ${text}`);
+  }
+
+  const data = await res.json();
+  return data.access_token as string;
 }
 
-function client() {
-    return new paypal.core.PayPalHttpClient(environment());
-}
+export async function POST(req: NextRequest) {
+  try {
+    const { orderId, items, totalKES } = await req.json();
 
-export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json();
-        const { orderId, items, totalKES } = body;
-
-        if (!orderId || !items || !totalKES) {
-            return NextResponse.json(
-                { error: 'Missing required fields' },
-                { status: 400 }
-            );
-        }
-
-        const supabase = await createClient();
-
-        // Get order details
-        const { data: order, error: orderError } = await supabase
-            .from('orders')
-            .select('*, order_items(*)')
-            .eq('order_number', orderId)
-            .single();
-
-        if (orderError || !order) {
-            return NextResponse.json(
-                { error: 'Order not found' },
-                { status: 404 }
-            );
-        }
-
-        // Convert KES amounts to USD
-        const totalUSD = convertKEStoUSD(parseFloat(totalKES));
-        const subtotalUSD = convertKEStoUSD(parseFloat(order.subtotal));
-        const shippingUSD = convertKEStoUSD(parseFloat(order.shipping || 0));
-        const taxUSD = convertKEStoUSD(parseFloat(order.tax || 0));
-
-        // Create PayPal order request
-        const paypalRequest = new paypal.orders.OrdersCreateRequest();
-        paypalRequest.prefer('return=representation');
-        paypalRequest.requestBody({
-            intent: 'CAPTURE',
-            application_context: {
-                brand_name: 'Your Store Name',
-                landing_page: 'BILLING',
-                user_action: 'PAY_NOW',
-                return_url: `${process.env.NEXT_PUBLIC_APP_URL}/orders/${orderId}?payment=success`,
-                cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cart?payment=cancelled`
-            },
-            purchase_units: [
-                {
-                    reference_id: orderId,
-                    description: `Order #${orderId}`,
-                    custom_id: orderId,
-                    soft_descriptor: 'Your Store',
-                    amount: {
-                        currency_code: 'USD',
-                        value: totalUSD.toFixed(2),
-                        breakdown: {
-                            item_total: {
-                                currency_code: 'USD',
-                                value: subtotalUSD.toFixed(2)
-                            },
-                            shipping: {
-                                currency_code: 'USD',
-                                value: shippingUSD.toFixed(2)
-                            },
-                            tax_total: {
-                                currency_code: 'USD',
-                                value: taxUSD.toFixed(2)
-                            }
-                        }
-                    },
-                    items: items.map((item: any) => {
-                        const priceUSD = convertKEStoUSD(parseFloat(item.price));
-                        return {
-                            name: item.name,
-                            description: item.description || item.name,
-                            sku: item.sku || item.id,
-                            unit_amount: {
-                                currency_code: 'USD',
-                                value: priceUSD.toFixed(2)
-                            },
-                            quantity: item.quantity.toString()
-                        };
-                    })
-                }
-            ]
-        });
-
-        // Execute PayPal request
-        const paypalResponse = await client().execute(paypalRequest);
-
-        // Update order with PayPal order ID and USD amount
-        await supabase
-            .from('orders')
-            .update({
-                metadata: {
-                    ...order.metadata,
-                    paypal_order_id: paypalResponse.result.id,
-                    payment_method: 'PayPal',
-                    payment_status: 'pending',
-                    amount_kes: totalKES,
-                    amount_usd: totalUSD.toFixed(2),
-                    exchange_rate: (totalUSD / parseFloat(totalKES)).toFixed(4)
-                }
-            })
-            .eq('id', order.id);
-
-        // Create payment transaction record with both currencies
-        await supabase
-            .from('payment_transactions')
-            .insert({
-                order_id: order.id,
-                store_id: order.store_id,
-                provider: 'paypal',
-                transaction_id: paypalResponse.result.id,
-                amount: totalUSD, // Store USD amount
-                currency: 'USD',
-                status: 'pending',
-                metadata: {
-                    paypal_order_id: paypalResponse.result.id,
-                    payer_id: null,
-                    amount_kes: totalKES,
-                    amount_usd: totalUSD.toFixed(2),
-                    exchange_rate: (totalUSD / parseFloat(totalKES)).toFixed(4)
-                }
-            });
-
-        return NextResponse.json({
-            success: true,
-            orderID: paypalResponse.result.id,
-            amountKES: totalKES,
-            amountUSD: totalUSD.toFixed(2)
-        });
-
-    } catch (error) {
-        console.error('PayPal create order error:', error);
-        return NextResponse.json(
-            {
-                error: 'Payment initialization failed',
-                details: error instanceof Error ? error.message : 'Unknown error'
-            },
-            { status: 500 }
-        );
+    if (!orderId || !items || !totalKES) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
+
+    const accessToken = await getAccessToken();
+
+    // Build per-item breakdown for PayPal
+    // We pass prices as USD; convertKEStoUSD is a server-side helper here
+    const KES_TO_USD = parseFloat(process.env.KES_TO_USD_RATE ?? '0.0077');
+
+    const itemBreakdown = (items as any[]).map((item) => ({
+      name:        item.name.slice(0, 127),
+      sku:         (item.sku ?? '').slice(0, 127),
+      unit_amount: {
+        currency_code: 'USD',
+        value: (item.price * KES_TO_USD).toFixed(2),
+      },
+      quantity: String(item.quantity),
+    }));
+
+    const itemTotal = (
+      (items as any[]).reduce(
+        (sum: number, item: any) => sum + item.price * item.quantity,
+        0
+      ) * KES_TO_USD
+    ).toFixed(2);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+    const body = {
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          reference_id:  orderId,
+          description:   `Order ${orderId}`,
+          amount: {
+            currency_code: 'USD',
+            value:         itemTotal,
+            breakdown: {
+              item_total: { currency_code: 'USD', value: itemTotal },
+            },
+          },
+          items: itemBreakdown,
+        },
+      ],
+      payment_source: {
+        paypal: {
+          experience_context: {
+            payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
+            brand_name:               process.env.NEXT_PUBLIC_STORE_NAME ?? 'Our Store',
+            locale:                   'en-US',
+            landing_page:             'LOGIN',
+            user_action:              'PAY_NOW',
+            // After the buyer approves, PayPal GETs this URL with ?token=<paypalOrderId>
+            return_url: `${appUrl}/api/payments/paypal/capture-order`,
+            cancel_url: `${appUrl}/cart?payment=cancelled`,
+          },
+        },
+      },
+    };
+
+    const orderRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: {
+        Authorization:  `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'PayPal-Request-Id': orderId, // idempotency key
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!orderRes.ok) {
+      const errText = await orderRes.text();
+      console.error('PayPal create-order error:', errText);
+      throw new Error(`PayPal order creation failed: ${orderRes.status}`);
+    }
+
+    const orderData = await orderRes.json();
+
+    // Find the payer-action link (the URL we redirect the buyer to)
+    const approvalLink = (orderData.links as any[]).find(
+      (l) => l.rel === 'payer-action'
+    );
+
+    return NextResponse.json({
+      success:     true,
+      orderID:     orderData.id,
+      approvalUrl: approvalLink?.href,
+    });
+
+  } catch (error) {
+    console.error('create-order route error:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
 }
