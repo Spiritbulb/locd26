@@ -160,44 +160,69 @@ export default function CartPage() {
   };
 
   // ── Full checkout flow (replaces PayPal SDK) ───────────────────
-  const handleCheckout = async () => {
-    setError('');
-    setIsProcessing(true);
+ // In your CartPage component, replace handleCheckout with:
+const handleCheckout = async () => {
+  setError('');
+  setIsProcessing(true);
 
-    try {
-      // 1. Persist order in DB
-      const orderNumber = await createOrder();
+  try {
+    // 1️⃣ VALIDATE cart data FIRST
+    const validItems = safeCartItems
+      .filter(item => 
+        item.name?.trim() && 
+        Number.isFinite(item.price) && 
+        item.price > 0 && 
+        Number.isFinite(item.quantity) && 
+        item.quantity > 0
+      )
+      .map(item => ({
+        name: item.name.trim().slice(0, 100),
+        sku: item.variantId?.slice(-8) || 'N/A',
+        price: Math.max(0.01, Math.round(item.price * 100) / 100), // 2 decimals min $0.01
+        quantity: Math.max(1, Math.min(999, Math.floor(item.quantity))),
+      }));
 
-      // 2. Create PayPal order via our route
-      const createRes = await fetch('/api/payments/paypal/create-order', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId:  orderNumber,
-          items:    safeCartItems.map(item => ({
-            name:     item.name,
-            sku:      item.variantId,
-            price:    item.price,
-            quantity: item.quantity,
-          })),
-          totalKES: totalKES.toFixed(2),
-        }),
-      });
-
-      const createData = await createRes.json();
-      if (!createData.success) throw new Error(createData.error || 'Failed to create PayPal order');
-
-      // 3. Redirect to PayPal approval URL
-      //    The return URL lands on /api/payments/paypal/capture-order which then
-      //    redirects the browser to /orders/<orderNumber>?payment=success
-      window.location.href = createData.approvalUrl;
-
-    } catch (err) {
-      console.error('Checkout error:', err);
-      setError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
-      setIsProcessing(false);
+    if (validItems.length === 0) {
+      throw new Error('No valid items in cart');
     }
-  };
+
+    console.log('🛒 Sending to PayPal:', {
+      validItemsCount: validItems.length,
+      firstItem: validItems[0],
+      totalKES,
+    });
+
+    // 2️⃣ Create DB order
+    const orderNumber = await createOrder();
+
+    // 3️⃣ PayPal order with VALID data
+    const createRes = await fetch('/api/payments/paypal/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: orderNumber,
+        items: validItems,
+        totalKES: Number(totalKES.toFixed(2)), // Exact 2 decimals
+      }),
+    });
+
+    const createData = await createRes.json();
+    
+    if (!createData.success) {
+      console.error('PayPal create error:', createData);
+      throw new Error(createData.error || 'PayPal setup failed');
+    }
+
+    // 4️⃣ Redirect to PayPal
+    window.location.href = createData.approvalUrl;
+
+  } catch (err) {
+    console.error('Checkout failed:', err);
+    setError(err instanceof Error ? err.message : 'Checkout failed');
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   // ── Render ─────────────────────────────────────────────────────
   return (
