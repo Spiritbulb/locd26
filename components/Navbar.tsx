@@ -1,6 +1,8 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Menu, X, User, Heart, Mail, Lock, UserPlus, LogOut } from 'lucide-react';
+import {
+  ShoppingCart, Menu, X, User, Heart, Mail, Lock, UserPlus, LogOut
+} from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
@@ -26,7 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
 const Navbar = () => {
@@ -44,12 +46,11 @@ const Navbar = () => {
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const supabase = createClient();
 
-  // Check authentication state on mount
+  // ── Auth state management ──────────────────────────────────────
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -58,15 +59,35 @@ const Navbar = () => {
     };
     checkUser();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsAuthenticated(!!session?.user);
-    });
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setIsAuthenticated(!!session?.user);
+      }
+    );
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Scroll behavior ────────────────────────────────────────────
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setIsScrolled(currentScrollY > 50);
+
+      // Hide on scroll down, show on scroll up
+      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+      }
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
+  // ── Auth helpers ───────────────────────────────────────────────
   const resetAuthForm = () => {
     setEmail('');
     setPassword('');
@@ -78,13 +99,11 @@ const Navbar = () => {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
       if (authMode === 'recover') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
         });
-
         if (error) throw error;
         setAuthMessage('Password reset email sent! Check your inbox.');
       } else if (authMode === 'signup') {
@@ -96,39 +115,29 @@ const Navbar = () => {
           setAuthMessage('Password must be at least 6 characters long');
           return;
         }
-
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              first_name: firstName,
-              last_name: lastName,
-            },
+            data: { first_name: firstName, last_name: lastName },
           },
         });
-
         if (error) throw error;
-        setAuthMessage('Account created successfully! Please check your email to verify.');
-
-        setTimeout(() => {
-          setAuthOpen(false);
-          resetAuthForm();
-        }, 2000);
+        setAuthMessage('Account created! Please check your email to verify.');
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-
         if (error) throw error;
         setAuthMessage('Login successful!');
-
-        setTimeout(() => {
-          setAuthOpen(false);
-          resetAuthForm();
-        }, 1500);
       }
+
+      // Auto-close on success
+      setTimeout(() => {
+        setMobileOpen(false);
+        resetAuthForm();
+      }, 2000);
     } catch (error: any) {
       setAuthMessage(error.message || 'An error occurred');
     }
@@ -136,8 +145,7 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await supabase.auth.signOut();
       router.push('/');
     } catch (error: any) {
       console.error('Logout error:', error.message);
@@ -146,423 +154,388 @@ const Navbar = () => {
 
   const navigationLinks = [
     { href: '/products', label: 'Products' },
-    { href: '/collections', label: 'Collections' }
+    { href: '/collections', label: 'Collections' },
   ];
 
-  const isLinkActive = (href: string) => {
-    if (href === '/') return pathname === href;
-    return pathname.startsWith(href);
-  };
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setIsScrolled(currentScrollY > 50);
-
-      if (currentScrollY > lastScrollY && currentScrollY > 100) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+  const isLinkActive = (href: string) =>
+    href === '/' ? pathname === href : pathname.startsWith(href);
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
-        } ${isScrolled
-          ? 'bg-background backdrop-blur-sm border-b'
-          : 'bg-background backdrop-blur-sm border-b border-border/50'
-        }`}
-    >
-      <div className="max-w-7xl mx-auto px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Brand Section - Links to Homepage */}
-          <Link href="/" className="flex items-center gap-2 group transition-all duration-300 hover:scale-105">
-            <img
-              src="/logoloc.png"
-              alt="Loc'd Essence Logo"
-              className="h-12 w-auto object-contain"
-            />
-            <div>
-              <span className="text-xl font-bold bg-gradient-to-r from-[#8a6e5d] via-[#a38776] to-[#7e4507] bg-clip-text text-transparent">
-                Loc'd Essence
-              </span>
-              <div className="text-xs text-gray-500 -mt-1">
-                Hair • Jewelry • Beauty
-              </div>
-            </div>
-          </Link>
-
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-1">
-            {navigationLinks.map((link) => (
-              <Button
-                key={link.href}
-                variant={isLinkActive(link.href) ? 'secondary' : 'ghost'}
-                onClick={() => router.push(link.href)}
-                className="font-normal"
-              >
-                {link.label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Desktop Actions */}
-          <div className="hidden lg:flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push('/cart')}
-              className="relative"
+    <>
+      {/* ── Main Navbar ────────────────────────────────────────────── */}
+      <nav
+        className={`
+          fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out
+          ${isVisible ? 'translate-y-0' : '-translate-y-full'}
+          ${
+            isScrolled
+              ? 'bg-background/95 backdrop-blur-md border-b border-border shadow-sm'
+              : 'bg-background/90 backdrop-blur-md border-b border-border/50'
+          }
+        `}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            
+            {/* ── Brand/Logo ───────────────────────────────────────── */}
+            <Link
+              href="/"
+              className="flex items-center gap-2 group hover:scale-[1.02] transition-transform duration-200"
             >
-              <ShoppingCart className="h-5 w-5" />
-              {cartItems.length > 0 && (
-                <Badge
-                  variant="default"
-                  className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+              <img
+                src="/logoloc.png"
+                alt="Loc'd Essence Logo"
+                className="h-9 sm:h-10 w-auto object-contain group-hover:scale-105 transition-transform"
+              />
+              <div className="hidden sm:block">
+                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-[#8a6e5d] via-[#a38776] to-[#7e4507] bg-clip-text text-transparent leading-tight">
+                  Loc'd Essence
+                </span>
+                <div className="text-xs text-muted-foreground -mt-1 font-light">
+                  Hair • Jewelry • Beauty
+                </div>
+              </div>
+            </Link>
+
+            {/* ── Desktop Navigation ───────────────────────────────── */}
+            <div className="hidden md:flex items-center gap-1 sm:gap-2">
+              {navigationLinks.map(({ href, label }) => (
+                <Button
+                  key={href}
+                  variant={isLinkActive(href) ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-9 px-3 sm:px-4 font-normal text-sm sm:text-base"
+                  onClick={() => router.push(href)}
                 >
-                  {cartItems.length}
-                </Badge>
-              )}
-            </Button>
+                  {label}
+                </Button>
+              ))}
+            </div>
 
-            <Separator orientation="vertical" className="h-6 mx-2" />
+            {/* ── Desktop Right Actions ────────────────────────────── */}
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9 sm:h-10 sm:w-10"
+                onClick={() => router.push('/cart')}
+              >
+                <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
+                {cartItems.length > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center min-w-[20px]"
+                  >
+                    {cartItems.length > 99 ? '99+' : cartItems.length}
+                  </Badge>
+                )}
+              </Button>
 
-            {isAuthenticated ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2">
-                    <User className="h-4 w-4" />
-                    <span className="max-w-[100px] truncate">
-                      {user?.user_metadata?.first_name || 'Account'}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium">
-                        {user?.user_metadata?.first_name} {user?.user_metadata?.last_name}
+              <Separator orientation="vertical" className="h-6 mx-2 hidden sm:block" />
+
+              {/* ── Auth Dropdown ─────────────────────────────────── */}
+              {isAuthenticated ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-9 px-3 gap-2">
+                      <User className="h-4 w-4" />
+                      <span className="hidden sm:inline max-w-[120px] truncate text-sm">
+                        {user?.user_metadata?.first_name || 'Account'}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {user?.user_metadata?.first_name}{' '}
+                        {user?.user_metadata?.last_name}
                       </p>
-                      <p className="text-xs text-muted-foreground">{user?.email}</p>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push('/account')}>
-                    <User className="mr-2 h-4 w-4" />
-                    My Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/orders')}>
-                    <ShoppingCart className="mr-2 h-4 w-4" />
-                    Orders
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <DropdownMenu open={authOpen} onOpenChange={setAuthOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button>Sign In</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 p-0">
-                  <Card className="border-0 shadow-none">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-normal">
-                        {authMode === 'signup' ? 'Create Account' : authMode === 'recover' ? 'Reset Password' : 'Welcome Back'}
-                      </CardTitle>
-                      <CardDescription>
-                        {authMode === 'signup'
-                          ? 'Join our community'
-                          : authMode === 'recover'
-                            ? 'Enter your email to receive a reset link'
-                            : 'Sign in to your account'}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <form onSubmit={handleAuthSubmit} className="space-y-4">
-                        {authMode === 'signup' && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <Label htmlFor="firstName">First Name</Label>
-                              <Input
-                                id="firstName"
-                                value={firstName}
-                                onChange={(e) => setFirstName(e.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="lastName">Last Name</Label>
-                              <Input
-                                id="lastName"
-                                value={lastName}
-                                onChange={(e) => setLastName(e.target.value)}
-                                required
-                              />
-                            </div>
-                          </div>
-                        )}
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user?.email}
+                      </p>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push('/account')}>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>My Account</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/orders')}>
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      <span>Orders</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-9 px-4 text-sm sm:text-base font-normal"
+                >
+                  Sign In
+                </Button>
+              )}
+            </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email</Label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              id="email"
-                              type="email"
-                              className="pl-9"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                              placeholder="your@email.com"
-                              required
-                            />
+            {/* ── Mobile Menu Trigger ───────────────────────────────── */}
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger asChild className="md:hidden">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80 p-0 sm:w-[400px]">
+                <div className="flex flex-col h-full">
+                  
+                  {/* ── Mobile Header ───────────────────────────────── */}
+                  <div className="p-6 border-b">
+                    <div className="flex items-center justify-between">
+                      <SheetTitle className="text-lg font-normal">Menu</SheetTitle>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setMobileOpen(false)}
+                        className="h-8 w-8"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* ── Mobile Content ───────────────────────────────── */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    
+                    {/* ── Navigation Links ───────────────────────────── */}
+                    <nav className="space-y-2">
+                      {navigationLinks.map(({ href, label }) => (
+                        <Button
+                          key={href}
+                          variant={isLinkActive(href) ? 'secondary' : 'ghost'}
+                          className="w-full justify-start h-12 font-normal text-base"
+                          onClick={() => {
+                            router.push(href);
+                            setMobileOpen(false);
+                          }}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </nav>
+
+                    <Separator />
+
+                    {/* ── Cart Button ─────────────────────────────────── */}
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 justify-start text-base gap-3"
+                      onClick={() => {
+                        router.push('/cart');
+                        setMobileOpen(false);
+                      }}
+                    >
+                      <ShoppingCart className="h-5 w-5 shrink-0" />
+                      Cart ({cartItems.length})
+                    </Button>
+
+                    <Separator />
+
+                    {/* ── Auth Section ────────────────────────────────── */}
+                    {isAuthenticated ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+                          <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                            <User className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base font-medium truncate">
+                              {user?.user_metadata?.first_name}{' '}
+                              {user?.user_metadata?.last_name}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {user?.email}
+                            </p>
                           </div>
                         </div>
-
-                        {authMode !== 'recover' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <div className="relative">
-                              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                id="password"
-                                type="password"
-                                className="pl-9"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {authMode === 'signup' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="confirmPassword">Confirm Password</Label>
-                            <div className="relative">
-                              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                id="confirmPassword"
-                                type="password"
-                                className="pl-9"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                required
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        <Button type="submit" className="w-full">
-                          {authMode === 'recover' ? 'Send Reset Link' : authMode === 'signup' ? 'Create Account' : 'Sign In'}
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 text-base"
+                          onClick={() => {
+                            handleLogout();
+                            setMobileOpen(false);
+                          }}
+                        >
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Logout
                         </Button>
-                      </form>
-
-                      <div className="mt-4 space-y-2 text-center text-sm">
-                        {authMode === 'signin' && (
-                          <>
-                            <Button
-                              variant="link"
-                              onClick={() => { setAuthMode('signup'); resetAuthForm(); }}
-                              className="text-xs w-full"
-                            >
-                              Don't have an account? Create one
-                            </Button>
-                            <Button
-                              variant="link"
-                              onClick={() => { setAuthMode('recover'); resetAuthForm(); }}
-                              className="text-xs w-full"
-                            >
-                              Forgot Password?
-                            </Button>
-                          </>
-                        )}
-                        {(authMode === 'signup' || authMode === 'recover') && (
-                          <Button
-                            variant="link"
-                            onClick={() => { setAuthMode('signin'); resetAuthForm(); }}
-                            className="text-xs w-full"
-                          >
-                            Back to Sign In
-                          </Button>
-                        )}
                       </div>
-
-                      {authMessage && (
-                        <p className={`mt-3 text-xs text-center ${authMessage.includes('successful') || authMessage.includes('sent') || authMessage.includes('created')
-                          ? 'text-green-600'
-                          : 'text-destructive'
-                          }`}>
-                          {authMessage}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-
-          {/* Mobile Menu */}
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:w-80">
-              <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
-              </SheetHeader>
-
-              <div className="mt-6 space-y-6">
-                {/* Mobile Nav Links */}
-                <nav className="space-y-1">
-                  {navigationLinks.map((link) => (
-                    <Button
-                      key={link.href}
-                      variant={isLinkActive(link.href) ? 'secondary' : 'ghost'}
-                      className="w-full justify-start font-normal"
-                      onClick={() => { router.push(link.href); setMobileOpen(false); }}
-                    >
-                      {link.label}
-                    </Button>
-                  ))}
-                </nav>
-
-                <Separator />
-
-                {/* Mobile Actions */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => { router.push('/cart'); setMobileOpen(false); }}
-                  >
-                    <ShoppingCart className="mr-2 h-4 w-4" />
-                    Cart ({cartItems.length})
-                  </Button>
-                </div>
-
-                <Separator />
-
-                {/* Mobile Auth */}
-                {isAuthenticated ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-muted">
-                      <div className="h-10 w-10 bg-background flex items-center justify-center">
-                        <User className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {user?.user_metadata?.first_name} {user?.user_metadata?.last_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" className="w-full py-12" onClick={handleLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Logout
-                    </Button>
-                  </div>
-                ) : (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        {authMode === 'signup' ? 'Create Account' : authMode === 'recover' ? 'Reset Password' : 'Sign In'}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <form onSubmit={handleAuthSubmit} className="space-y-3">
-                        {authMode === 'signup' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              placeholder="First Name"
-                              value={firstName}
-                              onChange={(e) => setFirstName(e.target.value)}
-                              required
-                            />
-                            <Input
-                              placeholder="Last Name"
-                              value={lastName}
-                              onChange={(e) => setLastName(e.target.value)}
-                              required
-                            />
-                          </div>
-                        )}
-                        <Input
-                          type="email"
-                          placeholder="Email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                        />
-                        {authMode !== 'recover' && (
-                          <>
-                            <Input
-                              type="password"
-                              placeholder="Password"
-                              value={password}
-                              onChange={(e) => setPassword(e.target.value)}
-                              required
-                            />
+                    ) : (
+                      <Card>
+                        <CardHeader className="pb-4">
+                          <CardTitle className="text-base font-normal">
+                            {authMode === 'signup' 
+                              ? 'Create Account' 
+                              : authMode === 'recover' 
+                                ? 'Reset Password' 
+                                : 'Welcome Back'
+                            }
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            {authMode === 'signup'
+                              ? 'Join our community'
+                              : authMode === 'recover'
+                                ? 'Enter your email to receive a reset link'
+                                : 'Sign in to your account'}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-4">
+                          <form onSubmit={handleAuthSubmit}>
                             {authMode === 'signup' && (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                  <Label htmlFor="firstName" className="text-xs">First Name</Label>
+                                  <Input
+                                    id="firstName"
+                                    size="sm"
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="lastName" className="text-xs">Last Name</Label>
+                                  <Input
+                                    id="lastName"
+                                    size="sm"
+                                    value={lastName}
+                                    onChange={(e) => setLastName(e.target.value)}
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              <Label htmlFor="email" className="text-xs">Email</Label>
                               <Input
-                                type="password"
-                                placeholder="Confirm Password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                id="email"
+                                type="email"
+                                size="sm"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="your@email.com"
                                 required
                               />
+                            </div>
+                            {authMode !== 'recover' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="password" className="text-xs">Password</Label>
+                                <Input
+                                  id="password"
+                                  type="password"
+                                  size="sm"
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  required
+                                />
+                              </div>
                             )}
-                          </>
-                        )}
-                        <Button type="submit" className="w-full">
-                          {authMode === 'recover' ? 'Send Link' : authMode === 'signup' ? 'Sign Up' : 'Sign In'}
-                        </Button>
-                      </form>
-
-                      <div className="mt-3 space-y-2">
-                        {authMode === 'signin' && (
-                          <>
-                            <Button variant="link" size="sm" onClick={() => { setAuthMode('signup'); resetAuthForm(); }} className="w-full text-xs">
-                              Create Account
+                            {authMode === 'signup' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="confirmPassword" className="text-xs">Confirm Password</Label>
+                                <Input
+                                  id="confirmPassword"
+                                  type="password"
+                                  size="sm"
+                                  value={confirmPassword}
+                                  onChange={(e) => setConfirmPassword(e.target.value)}
+                                  required
+                                />
+                              </div>
+                            )}
+                            <Button type="submit" className="w-full h-11 text-sm">
+                              {authMode === 'recover'
+                                ? 'Send Reset Link'
+                                : authMode === 'signup'
+                                  ? 'Create Account'
+                                  : 'Sign In'}
                             </Button>
-                            <Button variant="link" size="sm" onClick={() => { setAuthMode('recover'); resetAuthForm(); }} className="w-full text-xs">
-                              Forgot Password?
-                            </Button>
-                          </>
-                        )}
-                        {(authMode === 'signup' || authMode === 'recover') && (
-                          <Button variant="link" size="sm" onClick={() => { setAuthMode('signin'); resetAuthForm(); }} className="w-full text-xs">
-                            Back to Sign In
-                          </Button>
-                        )}
-                      </div>
+                          </form>
+                          
+                          {/* Mode switchers */}
+                          <div className="space-y-2 pt-2">
+                            {authMode === 'signin' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start h-9 text-xs"
+                                  type="button"
+                                  onClick={() => {
+                                    setAuthMode('signup');
+                                    resetAuthForm();
+                                  }}
+                                >
+                                  <UserPlus className="mr-2 h-3 w-3" />
+                                  Don't have an account? Create one
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start h-9 text-xs"
+                                  type="button"
+                                  onClick={() => {
+                                    setAuthMode('recover');
+                                    resetAuthForm();
+                                  }}
+                                >
+                                  Forgot Password?
+                                </Button>
+                              </>
+                            )}
+                            {(authMode === 'signup' || authMode === 'recover') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start h-9 text-xs"
+                                type="button"
+                                onClick={() => {
+                                  setAuthMode('signin');
+                                  resetAuthForm();
+                                }}
+                              >
+                                Back to Sign In
+                              </Button>
+                            )}
+                          </div>
 
-                      {authMessage && (
-                        <p className={`mt-2 text-xs text-center ${authMessage.includes('successful') ? 'text-green-600' : 'text-destructive'}`}>
-                          {authMessage}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+                          {authMessage && (
+                            <p
+                              className={`text-xs text-center mt-3 p-2 rounded ${
+                                authMessage.includes('successful') || authMessage.includes('sent')
+                                  ? 'bg-green-50 text-green-700 border border-green-200'
+                                  : 'bg-destructive/10 text-destructive border border-destructive/20'
+                              }`}
+                            >
+                              {authMessage}
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* ── Spacer to prevent content jumping ─────────────────────── */}
+      <div className="h-14 sm:h-16" />
+    </>
   );
 };
 
