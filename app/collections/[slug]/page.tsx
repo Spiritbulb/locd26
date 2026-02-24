@@ -277,7 +277,7 @@ export default function CollectionDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen pt-20 bg-background">
+      <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-8 py-12">
           <div className="flex justify-center items-center min-h-[60vh]">
             <div className="text-center">
@@ -292,7 +292,7 @@ export default function CollectionDetailPage() {
 
   if (error || !collection) {
     return (
-      <div className="min-h-screen pt-20 bg-background">
+      <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-8 py-12">
           <div className="flex justify-center items-center min-h-[60vh]">
             <Alert variant="destructive" className="max-w-md">
@@ -314,7 +314,7 @@ export default function CollectionDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pt-20 bg-background">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-8 py-8">
         <Button variant="ghost" className="mb-8 -ml-4" asChild>
           <Link href="/collections">

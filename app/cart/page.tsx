@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import Image from 'next/image';
 
 export default function CartPage() {
@@ -29,6 +30,11 @@ export default function CartPage() {
   const [error, setError] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [currentOrderNumber, setCurrentOrderNumber] = useState<string | null>(null);
+
+  // ✅ NEW: payment method + mpesa code
+  const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'mpesa'>('paypal');
+  const [mpesaCode, setMpesaCode] = useState('');
+
   const router = useRouter();
   const supabase = createClient();
   const safeCartItems = Array.isArray(cartItems) ? cartItems : [];
@@ -68,8 +74,8 @@ export default function CartPage() {
     (sum, item) => sum + item.price * item.quantity, 0
   );
   const shippingKES = 0;
-  const totalKES    = subtotalKES + shippingKES;
-  const totalUSD    = convertKEStoUSD(totalKES);
+  const totalKES = subtotalKES + shippingKES;
+  const totalUSD = convertKEStoUSD(totalKES);
 
   // ── Create DB order, return orderNumber ────────────────────────
   const createOrder = async (): Promise<string> => {
@@ -78,7 +84,7 @@ export default function CartPage() {
       throw new Error('Please log in to complete your order');
     }
     if (safeCartItems.length === 0) throw new Error('Your cart is empty');
-    if (!STORE_SLUG)                 throw new Error('Store configuration error');
+    if (!STORE_SLUG) throw new Error('Store configuration error');
 
     const { data: store, error: storeError } = await supabase
       .from('stores')
@@ -104,10 +110,10 @@ export default function CartPage() {
       const { data: newCustomer, error: ce } = await supabase
         .from('customers')
         .insert({
-          store_id:   store.id,
-          email:      user.email,
+          store_id: store.id,
+          email: user.email,
           first_name: user.user_metadata?.first_name || user.email?.split('@')[0] || 'Customer',
-          last_name:  user.user_metadata?.last_name  || '',
+          last_name: user.user_metadata?.last_name || '',
         })
         .select('id')
         .single();
@@ -121,20 +127,24 @@ export default function CartPage() {
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
-        store_id:           store.id,
-        customer_id:        customerId,
-        order_number:       orderNumber,
-        status:             'pending',
-        financial_status:   'pending',
+        store_id: store.id,
+        customer_id: customerId,
+        order_number: orderNumber,
+        status: 'pending',
+        financial_status: 'pending',
         fulfillment_status: 'unfulfilled',
-        subtotal:           subtotalKES,
-        tax:                0,
-        shipping:           shippingKES,
-        discount:           0,
-        total:              totalKES,
-        currency:           'KES',
-        customer_email:     user.email,
-        metadata:           { payment_method: 'PayPal', payment_status: 'pending' },
+        subtotal: subtotalKES,
+        tax: 0,
+        shipping: shippingKES,
+        discount: 0,
+        total: totalKES,
+        currency: 'KES',
+        customer_email: user.email,
+        // ✅ CHANGED: keep old default but reflect selected method
+        metadata: {
+          payment_method: paymentMethod === 'mpesa' ? 'MPESA' : 'PayPal',
+          payment_status: 'pending',
+        },
       })
       .select('id, order_number')
       .single();
@@ -143,15 +153,15 @@ export default function CartPage() {
 
     const { error: itemsError } = await supabase.from('order_items').insert(
       safeCartItems.map(item => ({
-        order_id:   order.id,
+        order_id: order.id,
         product_id: item.productId,
         variant_id: item.variantId !== item.productId ? item.variantId : null,
-        quantity:   item.quantity,
-        price:      item.price,
-        total:      item.price * item.quantity,
-        title:      item.name,
-        sku:        item.variantId,
-        image_url:  item.image,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.price * item.quantity,
+        title: item.name,
+        sku: item.variantId,
+        image_url: item.image,
       }))
     );
     if (itemsError) throw itemsError;
@@ -159,74 +169,124 @@ export default function CartPage() {
     return orderNumber;
   };
 
+  // ✅ NEW: Mpesa submit handler (stores transaction code on the order)
+  const handleMpesaCheckout = async () => {
+    setError('');
+    setIsProcessing(true);
+
+    try {
+      const code = mpesaCode.trim().toUpperCase();
+
+      if (!code) throw new Error('Please enter your M-PESA transaction code');
+
+      // (Optional) light validation: keep permissive, only alphanumeric and length >= 6
+      if (!/^[A-Z0-9]+$/.test(code) || code.length < 6 || code.length > 20) {
+        throw new Error('Invalid transaction code format');
+      }
+
+      // 1) Create DB order
+      const orderNumber = await createOrder();
+
+      // 2) Update order metadata with mpesa code
+      //    (We update the whole metadata object here, which is simplest via Supabase update.) [page:2]
+      const { error: upErr } = await supabase
+        .from('orders')
+        .update({
+          metadata: {
+            payment_method: 'MPESA',
+            payment_status: 'submitted',
+            mpesa_transaction_code: code,
+          },
+        })
+        .eq('order_number', orderNumber);
+
+      if (upErr) throw upErr;
+
+      // 3) Clear cart + go to success/thank-you (adjust route if you already have one)
+      await clearCart();
+      router.push(`/orders/${orderNumber}`);
+    } catch (err) {
+      console.error('M-PESA checkout failed:', err);
+      setError(err instanceof Error ? err.message : 'Checkout failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // ── Full checkout flow (replaces PayPal SDK) ───────────────────
- // In your CartPage component, replace handleCheckout with:
-const handleCheckout = async () => {
-  setError('');
-  setIsProcessing(true);
+  // In your CartPage component, replace handleCheckout with:
+  const handleCheckout = async () => {
+    setError('');
+    setIsProcessing(true);
 
-  try {
-    // 1️⃣ VALIDATE cart data FIRST
-    const validItems = safeCartItems
-      .filter(item => 
-        item.name?.trim() && 
-        Number.isFinite(item.price) && 
-        item.price > 0 && 
-        Number.isFinite(item.quantity) && 
-        item.quantity > 0
-      )
-      .map(item => ({
-        name: item.name.trim().slice(0, 100),
-        sku: item.variantId?.slice(-8) || 'N/A',
-        price: Math.max(0.01, Math.round(item.price * 100) / 100), // 2 decimals min $0.01
-        quantity: Math.max(1, Math.min(999, Math.floor(item.quantity))),
-      }));
+    try {
+      // ✅ If user chose M-PESA, do not call PayPal
+      if (paymentMethod === 'mpesa') {
+        await handleMpesaCheckout();
+        return;
+      }
 
-    if (validItems.length === 0) {
-      throw new Error('No valid items in cart');
+      // 1️⃣ VALIDATE cart data FIRST
+      const validItems = safeCartItems
+        .filter(item =>
+          item.name?.trim() &&
+          Number.isFinite(item.price) &&
+          item.price > 0 &&
+          Number.isFinite(item.quantity) &&
+          item.quantity > 0
+        )
+        .map(item => ({
+          name: item.name.trim().slice(0, 100),
+          sku: item.variantId?.slice(-8) || 'N/A',
+          price: Math.max(0.01, Math.round(item.price * 100) / 100), // 2 decimals min $0.01
+          quantity: Math.max(1, Math.min(999, Math.floor(item.quantity))),
+        }));
+
+      if (validItems.length === 0) {
+        throw new Error('No valid items in cart');
+      }
+
+      console.log('🛒 Sending to PayPal:', {
+        validItemsCount: validItems.length,
+        firstItem: validItems[0],
+        totalKES,
+      });
+
+      // 2️⃣ Create DB order
+      const orderNumber = await createOrder();
+
+      // 3️⃣ PayPal order with VALID data
+      const createRes = await fetch('/api/payments/paypal/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: orderNumber,
+          items: validItems,
+          totalKES: Number(totalKES.toFixed(2)), // Exact 2 decimals
+        }),
+      });
+
+      const createData = await createRes.json();
+
+      if (!createData.success) {
+        console.error('PayPal create error:', createData);
+        throw new Error(createData.error || 'PayPal setup failed');
+      }
+
+      // 4️⃣ Redirect to PayPal
+      window.location.href = createData.approvalUrl;
+
+    } catch (err) {
+      console.error('Checkout failed:', err);
+      setError(err instanceof Error ? err.message : 'Checkout failed');
+    } finally {
+      setIsProcessing(false);
     }
-
-    console.log('🛒 Sending to PayPal:', {
-      validItemsCount: validItems.length,
-      firstItem: validItems[0],
-      totalKES,
-    });
-
-    // 2️⃣ Create DB order
-    const orderNumber = await createOrder();
-
-    // 3️⃣ PayPal order with VALID data
-    const createRes = await fetch('/api/payments/paypal/create-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderId: orderNumber,
-        items: validItems,
-        totalKES: Number(totalKES.toFixed(2)), // Exact 2 decimals
-      }),
-    });
-
-    const createData = await createRes.json();
-    
-    if (!createData.success) {
-      console.error('PayPal create error:', createData);
-      throw new Error(createData.error || 'PayPal setup failed');
-    }
-
-    // 4️⃣ Redirect to PayPal
-    window.location.href = createData.approvalUrl;
-
-  } catch (err) {
-    console.error('Checkout failed:', err);
-    setError(err instanceof Error ? err.message : 'Checkout failed');
-  } finally {
-    setIsProcessing(false);
-  }
-};
+  };
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background pt-16 sm:pt-20">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8">
 
         {/* ── Loading ── */}
@@ -238,7 +298,7 @@ const handleCheckout = async () => {
             </div>
           </div>
 
-        /* ── Empty state ── */
+          /* ── Empty state ── */
         ) : safeCartItems.length === 0 ? (
           <div className="text-center py-12 sm:py-20 px-4">
             <Card className="max-w-md mx-auto border-border/50">
@@ -258,7 +318,7 @@ const handleCheckout = async () => {
             </Card>
           </div>
 
-        /* ── Cart ── */
+          /* ── Cart ── */
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
 
@@ -322,10 +382,6 @@ const handleCheckout = async () => {
                               </p>
                             </div>
 
-                            {/*
-                              On very small screens, stack price below qty controls.
-                              On sm+, keep them side by side.
-                            */}
                             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                               {/* Quantity controls */}
                               <div className="flex items-center border w-fit">
@@ -429,6 +485,75 @@ const handleCheckout = async () => {
                       </AlertDescription>
                     </Alert>
 
+                    {/* ✅ NEW: Payment method selector + MPESA input */}
+                    <div className="space-y-3">
+                      <div className="text-sm font-normal">Payment method</div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={paymentMethod === 'paypal' ? 'default' : 'outline'}
+                          className="flex-1"
+                          onClick={() => setPaymentMethod('paypal')}
+                          disabled={isProcessing}
+                        >
+                          PayPal
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={paymentMethod === 'mpesa' ? 'default' : 'outline'}
+                          className="flex-1"
+                          onClick={() => setPaymentMethod('mpesa')}
+                          disabled={isProcessing}
+                        >
+                          M-PESA
+                        </Button>
+                      </div>
+
+                      {paymentMethod === 'mpesa' && (
+                        <div className="space-y-2">
+                          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                            <ol className="space-y-2 leading-relaxed list-decimal pl-4">
+                              <li>Go to M-PESA Menu → Lipa na M-PESA → Buy Goods and Services</li>
+
+                              <li className="space-y-1">
+                                <div>Enter Business Number</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center rounded border bg-background px-2 py-1 font-mono text-foreground">
+                                    4202518
+                                  </span>
+                                  <CopyButton content="4202518" size="xs" />
+                                </div>
+                              </li>
+
+                              <li>
+                                Enter Amount:{' '}
+                                <span className="rounded border bg-background px-1.5 py-0.5 font-semibold text-foreground">
+                                  {formatKES(totalKES)}
+                                </span>
+                              </li>
+
+                              <li>Enter PIN and send</li>
+                              <li>
+                                Copy the confirmation code{' '}
+                                <span className="font-mono text-foreground">(e.g., QW12ABCDEF)</span>
+                              </li>
+                              <li>Paste it below and click “Confirm Payment”</li>
+                            </ol>
+                          </div>
+
+                          <input
+                            value={mpesaCode}
+                            onChange={(e) => setMpesaCode(e.target.value)}
+                            placeholder="e.g. QW12ABCDEF"
+                            className="w-full h-10 px-3 border bg-background text-sm"
+                            disabled={isProcessing}
+                            inputMode="text"
+                            autoComplete="off"
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     {/* Error */}
                     {error && (
                       <Alert variant="destructive">
@@ -448,7 +573,12 @@ const handleCheckout = async () => {
                         {isProcessing ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Redirecting to PayPal…
+                            {paymentMethod === 'mpesa' ? 'Submitting M-PESA…' : 'Redirecting to PayPal…'}
+                          </>
+                        ) : paymentMethod === 'mpesa' ? (
+                          <>
+                            <Shield className="mr-2 h-4 w-4" />
+                            Confirm M-PESA Payment
                           </>
                         ) : (
                           <>
@@ -473,7 +603,11 @@ const handleCheckout = async () => {
 
                     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground bg-muted p-3">
                       <Shield className="w-4 h-4 flex-shrink-0" />
-                      <span>Secure payment powered by PayPal</span>
+                      <span>
+                        {paymentMethod === 'mpesa'
+                          ? 'M-PESA payment requires transaction confirmation'
+                          : 'Secure payment powered by PayPal'}
+                      </span>
                     </div>
 
                     <p className="text-xs text-muted-foreground text-center leading-relaxed">

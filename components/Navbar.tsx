@@ -167,16 +167,15 @@ const Navbar = () => {
         className={`
           fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out
           ${isVisible ? 'translate-y-0' : '-translate-y-full'}
-          ${
-            isScrolled
-              ? 'bg-background/95 backdrop-blur-md border-b border-border shadow-sm'
-              : 'bg-background/90 backdrop-blur-md border-b border-border/50'
+          ${isScrolled
+            ? 'bg-background/95 backdrop-blur-md border-b border-border shadow-sm'
+            : 'bg-background/90 backdrop-blur-md border-b border-border/50'
           }
         `}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            
+
             {/* ── Brand/Logo ───────────────────────────────────────── */}
             <Link
               href="/"
@@ -187,7 +186,7 @@ const Navbar = () => {
                 alt="Loc'd Essence Logo"
                 className="h-9 sm:h-10 w-auto object-contain group-hover:scale-105 transition-transform"
               />
-              <div className="hidden sm:block">
+              <div className="">
                 <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-[#8a6e5d] via-[#a38776] to-[#7e4507] bg-clip-text text-transparent leading-tight">
                   Loc'd Essence
                 </span>
@@ -274,6 +273,7 @@ const Navbar = () => {
                 <Button
                   size="sm"
                   className="h-9 px-4 text-sm sm:text-base font-normal"
+                  onClick={() => router.push('/auth/login')}
                 >
                   Sign In
                 </Button>
@@ -289,7 +289,7 @@ const Navbar = () => {
               </SheetTrigger>
               <SheetContent side="right" className="w-80 p-0 sm:w-[400px]">
                 <div className="flex flex-col h-full">
-                  
+
                   {/* ── Mobile Header ───────────────────────────────── */}
                   <div className="p-6 border-b">
                     <div className="flex items-center justify-between">
@@ -307,7 +307,7 @@ const Navbar = () => {
 
                   {/* ── Mobile Content ───────────────────────────────── */}
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    
+
                     {/* ── Navigation Links ───────────────────────────── */}
                     <nav className="space-y-2">
                       {navigationLinks.map(({ href, label }) => (
@@ -375,10 +375,10 @@ const Navbar = () => {
                       <Card>
                         <CardHeader className="pb-4">
                           <CardTitle className="text-base font-normal">
-                            {authMode === 'signup' 
-                              ? 'Create Account' 
-                              : authMode === 'recover' 
-                                ? 'Reset Password' 
+                            {authMode === 'signup'
+                              ? 'Create Account'
+                              : authMode === 'recover'
+                                ? 'Reset Password'
                                 : 'Welcome Back'
                             }
                           </CardTitle>
@@ -391,7 +391,7 @@ const Navbar = () => {
                                   <Label htmlFor="firstName" className="text-xs">First Name</Label>
                                   <Input
                                     id="firstName"
-                                   
+
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
                                     required
@@ -401,7 +401,7 @@ const Navbar = () => {
                                   <Label htmlFor="lastName" className="text-xs">Last Name</Label>
                                   <Input
                                     id="lastName"
-                                   
+
                                     value={lastName}
                                     onChange={(e) => setLastName(e.target.value)}
                                     required
@@ -414,7 +414,7 @@ const Navbar = () => {
                               <Input
                                 id="email"
                                 type="email"
-                               
+
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="your@email.com"
@@ -427,7 +427,7 @@ const Navbar = () => {
                                 <Input
                                   id="password"
                                   type="password"
-                                 
+
                                   value={password}
                                   onChange={(e) => setPassword(e.target.value)}
                                   required
@@ -440,7 +440,7 @@ const Navbar = () => {
                                 <Input
                                   id="confirmPassword"
                                   type="password"
-                                  
+
                                   value={confirmPassword}
                                   onChange={(e) => setConfirmPassword(e.target.value)}
                                   required
@@ -455,7 +455,7 @@ const Navbar = () => {
                                   : 'Sign In'}
                             </Button>
                           </form>
-                          
+
                           {/* Mode switchers */}
                           <div className="space-y-2 pt-2">
                             {authMode === 'signin' && (
@@ -505,11 +505,10 @@ const Navbar = () => {
 
                           {authMessage && (
                             <p
-                              className={`text-xs text-center mt-3 p-2 rounded ${
-                                authMessage.includes('successful') || authMessage.includes('sent')
-                                  ? 'bg-green-50 text-green-700 border border-green-200'
-                                  : 'bg-destructive/10 text-destructive border border-destructive/20'
-                              }`}
+                              className={`text-xs text-center mt-3 p-2 rounded ${authMessage.includes('successful') || authMessage.includes('sent')
+                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                : 'bg-destructive/10 text-destructive border border-destructive/20'
+                                }`}
                             >
                               {authMessage}
                             </p>

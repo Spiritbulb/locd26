@@ -213,7 +213,7 @@ export default function ProductDetailPage() {
     }
   };
 
-  
+
   const nextImage = () => {
     if (product && product.images.length > 1) {
       setCurrentImageIndex((prev) =>
@@ -247,7 +247,7 @@ export default function ProductDetailPage() {
 
   if (error || !product) {
     return (
-      <div className="min-h-screen pt-20 bg-background">
+      <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-8 py-12">
           <div className="flex justify-center items-center min-h-[60vh]">
             <Alert variant="destructive" className="max-w-md">
@@ -507,7 +507,7 @@ export default function ProductDetailPage() {
                 {cartLoading ? 'Pushing your order...' : isInStock ? 'Add to Cart' : 'Out of Stock'}
               </Button>
 
-              
+
               <Button variant="outline" size="icon" className="h-12 w-12">
                 <Share2 className="h-5 w-5" />
               </Button>

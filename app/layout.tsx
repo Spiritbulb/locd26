@@ -34,7 +34,7 @@ export default function RootLayout({
               <NotificationProvider>
 
                 <Navbar />
-                <main className={`w-full mx-auto py-8`}>
+                <main className={`w-full mx-auto`}>
                   {children}
                 </main>
                 <Footer />
